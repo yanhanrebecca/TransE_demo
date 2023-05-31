@@ -1,11 +1,10 @@
-# 解释:
-# 1. 定义DBPDataset类表示DBP5K数据集,重写__getitem__方法返回三元组。
-# 2. 定义KGEmb模型表示知识图谱Embedding,包含实体与关系Embedding层。
-# 3. 构建DataLoader加载数据集,定义优化器与TransE损失函数进行训练。
-# 4. 训练结束后,ent_emb与rel_emb分别为实体与关系Embedding结果。
-# 5. 将模型参数保存为model.pkl文件,用于重新加载模型。
-# 所以,这个代码实现了DBP5K数据集的加载、Embedding模型的构建与训练、Embedding结果的获得与参数的保存。利用PyTorch高度优化Embedding学习过程,并得到数据集的初始表示形式。
-import numpy as np
+"""
+1. 定义DBPDataset类表示数据集,重写__getitem__方法返回三元组。
+2. 定义KGEmb模型表示知识图谱Embedding,包含实体与关系Embedding层。
+3. 构建DataLoader加载数据集,定义优化器与TransE损失函数进行训练。
+4. 训练结束后,ent_emb与rel_emb分别为实体与关系Embedding结果。
+5. 将模型参数保存为model.pkl文件,用于重新加载模型。
+"""
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
@@ -60,16 +59,16 @@ dataset = DBPDataset('./data/index_rel_triple.txt')
 torch.manual_seed(123)
 model = KGEmb(n_ent=10000, n_rel=100)
 
-#使用Adam优化器,对模型中的所有可训练参数进行更新，通过model.parameters()获得模型的所有可训练参数(Embedding)
-opt = torch.optim.Adam(model.parameters())
-# 使用DataLoader加载dataset数据集，每批数据大小为8192条三元组
-#shuffle=True:每个epoch打乱数据顺序
-loader = DataLoader(dataset, batch_size=8192, shuffle=True)
 """
 1. Adam优化器更新Embedding使loss下降
 2. DataLoader生成batch数据输入模型
 3. 打乱数据顺序使模型泛化能力提高
 """
+#使用Adam优化器,对模型中的所有可训练参数进行更新，通过model.parameters()获得模型的所有可训练参数(Embedding)
+opt = torch.optim.Adam(model.parameters())
+# 使用DataLoader加载dataset数据集，每批数据大小为8192条三元组，shuffle=True:每个epoch打乱数据顺序
+loader = DataLoader(dataset, batch_size=8192, shuffle=True)
+
 
 for epoch in range(200):
     """
@@ -84,6 +83,18 @@ for epoch in range(200):
         loss.backward()  # 反向传播,计算梯度值
         opt.step()  # 优化器更新参数
 
+
+# ent_emb:
+# - 行数为实体总数n,列表示每个实体的Embedding
+# - 列数为Embedding维度d,一般在50到200之间
+# - 所以ent_emb的shape为[n, d],是一个n行d列的矩阵
+# - 可以通过ent_emb[ent]访问第ent个实体的Embedding向量
+# rel_emb:
+# - 行数为关系总数m,列表示每个关系的Embedding
+# - 列数同样为Embedding维度d
+# - 所以rel_emb的shape为[m, d],是一个m行d列的矩阵
+# - 可以通过rel_emb[rel]访问第rel个关系的Embedding向量
+# NumPy矩阵是一种用于科学计算的二维数组,支持各种矩阵运算与操作
 # 得到Embedding结果，ent_emb:实体Embedding矩阵(numpy类型)，rel_emb:关系Embedding矩阵(numpy类型)
 ent_emb = model.ent_emb.weight.detach().numpy()
 rel_emb = model.rel_emb.weight.detach().numpy()
@@ -91,22 +102,6 @@ rel_emb = model.rel_emb.weight.detach().numpy()
 #保存的不仅仅是Embedding权重,还包括优化器状态,超参数等信息。当我们重新加载这个模型时,它的全部变量都会恢复到保存时的状态,可以直接使用或继续训练。
 torch.save(model.state_dict(), '../model.pkl')  # 保存模型
 
-"""
-ent_emb:
-- 行数为实体总数n,列表示每个实体的Embedding
-- 列数为Embedding维度d,一般在50到200之间
-- 所以ent_emb的shape为[n, d],是一个n行d列的矩阵
-- 可以通过ent_emb[ent]访问第ent个实体的Embedding向量
-rel_emb:
-- 行数为关系总数m,列表示每个关系的Embedding
-- 列数同样为Embedding维度d
-- 所以rel_emb的shape为[m, d],是一个m行d列的矩阵
-- 可以通过rel_emb[rel]访问第rel个关系的Embedding向量
-"""
-
-"""
-所以,NumPy矩阵是一种用于科学计算的二维数组,支持各种矩阵运算与操作
-"""
 ent1_emb = ent_emb[4]   # 实体ent1的Embedding
 ent2_emb = ent_emb[10]   # 实体ent2的Embedding
 sim = cosine(ent1_emb, ent2_emb)  # 两个实体的相似度
@@ -118,11 +113,3 @@ sim = cosine(ent1_emb, ent2_emb)  # 两个实体的相似度
 """
 print(sim)
 
-
-#计算最相似实体
-ent_emb = ent_emb[4]     # 头实体的Embedding
-rel_emb = rel_emb[7]      # 关系的Embedding
-infer_emb = ent_emb + rel_emb # 头实体与关系的Embedding之和
-
-# dist = [cosine(infer_emb, ent_emb[e]) for e in entities]
-# ent = entities[np.argmax(dist)] # 最相似的实体
