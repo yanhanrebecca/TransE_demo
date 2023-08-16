@@ -54,7 +54,7 @@ class KGEmb(nn.Module):
 
 
 # 训练代码
-dataset = DBPDataset('./data/index_rel_triple.txt')
+dataset = DBPDataset('src_data/index_rel_triple.txt')
 #设置固定的随机种子,使每次初始化产生的随机参数相同
 torch.manual_seed(123)
 model = KGEmb(n_ent=10000, n_rel=100)
@@ -113,3 +113,49 @@ sim = cosine(ent1_emb, ent2_emb)  # 两个实体的相似度
 """
 print(sim)
 
+
+def compute_metrics(ent_emb, rel_emb, test_triplets):
+    mrr = 0.0
+    hits_at_1 = 0.0
+    hits_at_3 = 0.0
+    hits_at_10 = 0.0
+
+    for triplet in test_triplets:
+        head, rel, tail = triplet
+        head_emb = ent_emb[head]
+        rel_emb = rel_emb[rel]
+        tail_emb = ent_emb[tail]
+
+        # Calculate the similarity scores between head and all other entities
+        scores = cosine(ent_emb, head_emb + rel_emb)
+
+        # Calculate the rank of the ground truth tail entity
+        rank = np.argsort(scores)[::-1].tolist().index(tail) + 1
+
+        # Update metrics
+        mrr += 1 / rank
+        if rank <= 1:
+            hits_at_1 += 1
+        if rank <= 3:
+            hits_at_3 += 1
+        if rank <= 10:
+            hits_at_10 += 1
+
+    # Compute average metrics
+    num_triplets = len(test_triplets)
+    mrr /= num_triplets
+    hits_at_1 /= num_triplets
+    hits_at_3 /= num_triplets
+    hits_at_10 /= num_triplets
+
+    return mrr, hits_at_1, hits_at_3, hits_at_10
+
+#
+# # Assuming you have a test dataset called test_dataset
+# test_triplets = test_dataset.triples
+# mrr, hits_at_1, hits_at_3, hits_at_10 = compute_metrics(ent_emb, rel_emb, test_triplets)
+#
+# print("MRR:", mrr)
+# print("Hits@1:", hits_at_1)
+# print("Hits@3:", hits_at_3)
+# print("Hits@10:", hits_at_10)
